@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Weekend Grocery Specials</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f4f7f5; color: #20382c; font: 16px/1.5 system-ui, sans-serif; }
+    main { max-width: 1400px; margin: auto; padding: 32px 24px; }
+    h1 { margin: 0; font-size: 2.2rem; }
+    h2 { font-size: 1.3rem; }
+    h2 span, .hint, .stamp { color: #506358; font-size: .9rem; font-weight: normal; }
+    .intro { margin-top: 4px; color: #506358; }
+    form, section, .guide, .store-filter { background: white; border: 1px solid #dce5df; border-radius: 12px; padding: 24px; margin-top: 20px; }
+    .fields { display: flex; flex-wrap: wrap; gap: 16px; align-items: end; }
+    label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; }
+    .food { flex: 1; min-width: 240px; }
+    input, select, button { font: inherit; border-radius: 6px; padding: 10px 12px; }
+    input, select { border: 1px solid #82998b; background: white; color: #20382c; }
+    button { background: #176341; color: white; border: 1px solid #176341; cursor: pointer; font-weight: 600; }
+    button:disabled { opacity: .7; cursor: wait; }
+    button.secondary { background: white; color: #176341; }
+    input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible { outline: 3px solid #d49527; outline-offset: 2px; }
+    .fields .hint, .hint { font-size: .9rem; color: #506358; }
+    .store-options { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+    .store-options label { display: inline-flex; flex-direction: row; align-items: center; gap: 6px; font-weight: 500; }
+    .store-options input, .choice { width: 1.1rem; height: 1.1rem; accent-color: #176341; }
+    .filter-actions, .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+    .filter-actions button { padding: 6px 10px; font-size: .9rem; }
+    [hidden] { display: none !important; }
+    .error { background: #fff0ee; color: #8b2020; border: 1px solid #e5aba6; border-radius: 6px; padding: 16px; overflow-wrap: anywhere; }
+    .table-wrap { overflow-x: auto; }
+    table { border-collapse: collapse; width: 100%; font-size: .95rem; }
+    th, td { text-align: left; vertical-align: top; padding: 12px; border-bottom: 1px solid #dce5df; }
+    th { background: #edf5ef; }
+    tbody tr:nth-child(even) { background: #f8faf8; }
+    tbody tr.cheapest { background: #e5f4e9; }
+    .price { min-width: 145px; font-weight: 700; }
+    .best-price { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 4px; background: #176341; color: white; font-size: .75rem; }
+    .estimate { position: sticky; bottom: 0; display: flex; justify-content: space-between; gap: 12px; align-items: center; margin-top: 20px; padding: 16px 20px; background: #20382c; color: white; border-radius: 10px; box-shadow: 0 2px 12px #0003; }
+    .estimate strong { font-size: 1.35rem; }
+    a { color: #145937; }
+    @media (max-width: 600px) {
+      main { padding: 20px 12px; }
+      form, section, .guide, .store-filter { padding: 16px; }
+      .estimate { align-items: flex-start; flex-direction: column; }
+    }
+    @media print {
+      body { background: white; color: black; font-size: 10pt; }
+      main { max-width: none; padding: 0; }
+      form, .store-filter, .actions, .intro, .estimate { display: none; }
+      section, .guide { padding: 10px 0; border: 0; }
+      .table-wrap { overflow: visible; }
+      th, td { padding: 6px; }
+      tr { break-inside: avoid; }
+      thead { display: table-header-group; }
+      .price { min-width: 0; }
+    }
+  </style>
+  <script src="api-config.js"></script>
+</head>
+<body>
+<main>
+  <h1>Weekend Grocery Specials</h1>
+  <p class="intro">Search this week's flyers, filter stores, and build an estimated shopping total.</p>
+  <form id="search-form">
+    <div class="fields">
+      <label class="food">What do you need?
+        <input id="foods" name="foods" placeholder="chicken breast, eggs, butter" maxlength="300" required>
+      </label>
+      <label>Postal code
+        <input id="postal" name="postal" value="J9J 3X7" maxlength="7" size="9" autocomplete="postal-code" required>
+      </label>
+      <label>Sort each food by
+        <select id="sort">
+          <option value="price" selected>Advertised price: low to high</option>
+          <option value="relevance">Best search match</option>
+          <option value="store">Store name</option>
+        </select>
+      </label>
+      <button type="submit" id="search" disabled>Find specials</button>
+    </div>
+    <p class="hint">Separate foods with commas (up to 8). Try a specific cut, such as chicken thighs, for more useful matches.</p>
+    <p id="status" class="hint" role="status" aria-live="polite">Loading store list…</p>
+  </form>
+  <fieldset class="store-filter">
+    <legend><strong>Stores to include</strong></legend>
+    <div id="store-options" class="store-options"></div>
+    <div class="filter-actions">
+      <button type="button" class="secondary" id="select-all">Select all</button>
+      <button type="button" class="secondary" id="clear-all">Clear all</button>
+    </div>
+    <p class="hint">Store matching is by merchant name, not individual branch. Confirm the Quebec location in the flyer.</p>
+  </fieldset>
+  <div class="guide">
+    <strong>Compare like with like.</strong> A $3.99/lb offer is not cheaper than a $7.99 package just because its number is smaller.
+    The estimated total adds one advertised price for each selected item; it does not account for quantities, units, taxes, or multi-buy conditions.
+    Confirm package details, membership requirements, and participating locations in the original flyer.
+    <p class="hint">Flyer results are not live inventory or a guarantee of stock. Search results may include stores across the Ottawa–Gatineau area.</p>
+  </div>
+  <div id="actions" class="actions" hidden>
+    <button type="button" id="print">Print / Save as PDF</button>
+    <button type="button" class="secondary" id="save">Save results as webpage</button>
+  </div>
+  <p id="stamp" class="stamp"></p>
+  <div id="results" aria-live="polite"></div>
+  <div id="estimate" class="estimate" hidden>
+    <span>Estimated total <span id="selection-count"></span><br><small>One offer per item; advertised amounts only</small></span>
+    <strong id="total">$0.00</strong>
+  </div>
+</main>
+<script>
+  const apiBase = (window.GROCERY_API_URL || window.location.origin).replace(/\/+$/, '');
+  const storeOptions = document.getElementById('store-options');
+  const status = document.getElementById('status');
+  const resultsElement = document.getElementById('results');
+  const selectedDeals = new Map();
+  let allResults = [];
+
+  function makeElement(tag, text, className) {
+    const element = document.createElement(tag);
+    if (text !== undefined) element.textContent = text;
+    if (className) element.className = className;
+    return element;
+  }
+
+  function selectedStores() {
+    return new Set([...storeOptions.querySelectorAll('input:checked')].map(input => input.value));
+  }
+
+  async function loadStores() {
+    try {
+      const response = await fetch(apiBase + '/api/stores');
+      const data = await response.json();
+      if (!response.ok || !Array.isArray(data.stores)) {
+        throw new Error(data.error || 'Could not load the store list.');
+      }
+      for (const store of data.stores) {
+        const label = makeElement('label');
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.value = store;
+        checkbox.checked = true;
+        checkbox.addEventListener('change', renderResults);
+        label.append(checkbox, document.createTextNode(store));
+        storeOptions.append(label);
+      }
+      document.getElementById('search').disabled = false;
+      status.textContent = 'Ready. Select the stores you want to compare.';
+    } catch (error) {
+      status.className = 'error';
+      status.textContent = 'Could not connect to the deal service. It may be starting up; reload this page and try again. ' + error.message;
+    }
+  }
+
+  function dateText(value) {
+    if (!value) return 'Not supplied';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? 'Not supplied' : date.toLocaleDateString();
+  }
+
+  function dealKey(deal) {
+    return [deal.merchant, deal.title, deal.price, deal.price_text, deal.flyer_url].join('|');
+  }
+
+  function makeDealRow(deal, itemIndex, cheapestKey) {
+    const row = document.createElement('tr');
+    const key = dealKey(deal);
+    const radioCell = document.createElement('td');
+    const radio = document.createElement('input');
+    radio.type = 'radio';
+    radio.className = 'choice';
+    radio.name = 'item-choice-' + itemIndex;
+    radio.value = deal.price;
+    radio.dataset.cost = deal.price;
+    radio.dataset.dealKey = key;
+    radio.setAttribute('aria-label', 'Choose ' + deal.merchant + ' offer for ' + deal.price_text);
+    radio.checked = (selectedDeals.get(itemIndex) || cheapestKey) === key;
+    if (radio.checked) selectedDeals.set(itemIndex, key);
+    radio.addEventListener('change', () => {
+      selectedDeals.set(itemIndex, key);
+      updateEstimate();
+    });
+    radioCell.append(radio);
+    row.append(radioCell);
+    row.append(makeElement('td', deal.merchant));
+    row.append(makeElement('td', deal.title));
+    const priceCell = makeElement('td', deal.price_text, 'price');
+    if (key === cheapestKey) priceCell.append(makeElement('span', 'Lowest listed', 'best-price'));
+    row.append(priceCell);
+    row.append(makeElement('td', deal.sale_story || 'See flyer for conditions'));
+    row.append(makeElement('td', dateText(deal.valid_from) + ' – ' + dateText(deal.valid_to)));
+    const sourceCell = document.createElement('td');
+    if (deal.flyer_url) {
+      const link = makeElement('a', 'View flyer');
+      link.href = deal.flyer_url;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      sourceCell.append(link);
+    } else {
+      sourceCell.textContent = 'Not supplied';
+    }
+    row.append(sourceCell);
+    if (key === cheapestKey) row.classList.add('cheapest');
+    return row;
+  }
+
+  function renderResults() {
+    resultsElement.replaceChildren();
+    const stores = selectedStores();
+    const sort = document.getElementById('sort').value;
+    let hasAnyDeals = false;
+    allResults.forEach((result, itemIndex) => {
+      const section = document.createElement('section');
+      const heading = makeElement('h2', result.item);
+      section.append(heading);
+      if (result.error) {
+        section.append(makeElement('p', result.error + ' Please try again later.', 'error'));
+      } else {
+        const deals = result.deals.filter(deal => stores.has(deal.store_category));
+        if (sort === 'price') deals.sort((a, b) => Number(a.price) - Number(b.price));
+        if (sort === 'store') deals.sort((a, b) => a.merchant.localeCompare(b.merchant) || a.title.localeCompare(b.title));
+        if (deals.length) {
+          if (selectedDeals.has(itemIndex) &&
+              !deals.some(deal => dealKey(deal) === selectedDeals.get(itemIndex))) {
+            selectedDeals.delete(itemIndex);
+          }
+          hasAnyDeals = true;
+          const cheapest = deals.reduce((best, deal) => Number(deal.price) < Number(best.price) ? deal : best);
+          heading.append(document.createTextNode(' (' + deals.length + ' matches)'));
+          const wrapper = makeElement('div', undefined, 'table-wrap');
+          const table = document.createElement('table');
+          const thead = document.createElement('thead');
+          const headerRow = document.createElement('tr');
+          for (const title of ['Choose', 'Store', 'Food / package details', 'Advertised price (CAD)', 'Offer / conditions', 'Sale dates', 'Source']) {
+            const th = makeElement('th', title);
+            th.scope = 'col';
+            headerRow.append(th);
+          }
+          thead.append(headerRow);
+          const tbody = document.createElement('tbody');
+          const cheapestKey = dealKey(cheapest);
+          for (const deal of deals) tbody.append(makeDealRow(deal, itemIndex, cheapestKey));
+          table.append(thead, tbody);
+          wrapper.append(table);
+          section.append(wrapper);
+        } else {
+          selectedDeals.delete(itemIndex);
+          section.append(makeElement('p', result.deals.length
+            ? 'No matches from the selected stores.'
+            : 'No active, priced flyer matches found. Try a broader food name.'));
+        }
+      }
+      resultsElement.append(section);
+    });
+    const hasResults = allResults.length > 0;
+    document.getElementById('actions').hidden = !hasResults;
+    document.getElementById('estimate').hidden = !hasAnyDeals;
+    updateEstimate();
+  }
+
+  function updateEstimate() {
+    const radios = [...resultsElement.querySelectorAll('input[type="radio"]:checked')];
+    const totalCents = radios.reduce((sum, radio) => sum + Math.round(Number(radio.dataset.cost) * 100), 0);
+    document.getElementById('total').textContent = '$' + (totalCents / 100).toFixed(2);
+    document.getElementById('selection-count').textContent = '(' + radios.length + ' item' + (radios.length === 1 ? '' : 's') + ')';
+  }
+
+  document.getElementById('search-form').addEventListener('submit', async event => {
+    event.preventDefault();
+    const button = document.getElementById('search');
+    button.disabled = true;
+    button.textContent = 'Checking…';
+    status.className = 'hint';
+    status.textContent = 'Checking flyers. The free service may need up to a minute to wake up.';
+    resultsElement.replaceChildren();
+    allResults = [];
+    selectedDeals.clear();
+    document.getElementById('actions').hidden = true;
+    document.getElementById('estimate').hidden = true;
+    const postal = document.getElementById('postal').value.trim().toUpperCase();
+    try {
+      const response = await fetch(apiBase + '/api/search', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({foods: document.getElementById('foods').value, postal})
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'The search could not be completed.');
+      allResults = data.results;
+      document.getElementById('stamp').textContent =
+        'Search area: ' + postal + ' · Checked: ' + new Date().toLocaleString() + ' · Prices in Canadian dollars';
+      renderResults();
+      status.textContent = 'Search complete. Choose one offer per item; the lowest displayed price is selected by default.';
+    } catch (error) {
+      status.className = 'error';
+      status.textContent = 'Search failed: ' + error.message;
+    } finally {
+      button.disabled = false;
+      button.textContent = 'Find specials';
+    }
+  });
+
+  document.getElementById('sort').addEventListener('change', renderResults);
+  document.getElementById('select-all').addEventListener('click', () => {
+    for (const input of storeOptions.querySelectorAll('input')) input.checked = true;
+    renderResults();
+  });
+  document.getElementById('clear-all').addEventListener('click', () => {
+    for (const input of storeOptions.querySelectorAll('input')) input.checked = false;
+    renderResults();
+  });
+  document.getElementById('print').addEventListener('click', () => window.print());
+  document.getElementById('save').addEventListener('click', () => {
+    const copy = document.documentElement.cloneNode(true);
+    copy.querySelectorAll('form, .store-filter, .actions, script').forEach(node => node.remove());
+    const blob = new Blob(['<!doctype html>\n', copy.outerHTML], {type: 'text/html;charset=utf-8'});
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'grocery-specials-' + new Date().toISOString().slice(0, 10) + '.html';
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  });
+
+  loadStores();
+</script>
+</body>
+</html>
