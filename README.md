@@ -27,31 +27,28 @@ plan. Render's free service sleeps after 15 minutes without traffic and can
 take about a minute to wake; free-tier limits can change. See
 [Render's free-instance details](https://render.com/docs/free).
 
-1. Create the public GitHub repository `grocery-specials` and upload this
-   project to its root. The `CNAME` file in this project configures the site
-   address `groceriesdeals.jopism.com`.
-2. In Render, create a **Blueprint** from that repository and deploy the
-   `grocery-specials-api` web service defined in `render.yaml`. The free plan
-   is selected in the Blueprint. Wait until Render reports the service as live.
-3. Copy the service's `onrender.com` address (for example,
-   `https://grocery-specials-api.onrender.com`) and set it in `api-config.js`:
+1. The public repository is
+   [JopPank/grocery-specials](https://github.com/JopPank/grocery-specials).
+   The `CNAME` file configures `groceriesdeals.jopism.com`.
+2. The Python API is deployed on Render's free plan at
+   `https://grocery-specials-api.onrender.com`. Its frontend endpoint is set in
+   `api-config.js`. The free plan sleeps after 15 minutes without traffic and
+   can take about a minute to wake.
+3. GitHub Pages publishes from the repository's `main` branch and root folder.
+   To activate the custom domain, add this DNS record at the provider for
+   `jopism.com`:
 
-   ```javascript
-   window.GROCERY_API_URL = "https://YOUR-SERVICE.onrender.com";
-   ```
+   | Type | Host/name | Target/value |
+   | --- | --- | --- |
+   | CNAME | `groceriesdeals` | `joppank.github.io` |
 
-   Do not add a trailing slash. Commit and push that edit.
-4. In the repository's **Settings → Pages**, publish from the `main` branch
-   and root folder. GitHub reads the custom domain from `CNAME`. For security,
-   verify `jopism.com` in your GitHub account's Pages settings before enabling
-   the domain if possible.
-5. At the DNS provider for `jopism.com`, add a CNAME record with host/name
-   `groceriesdeals` and target `<YOUR-GITHUB-USERNAME>.github.io`. Do not
-   replace or change the existing records for `jopism.com` itself. DNS changes
-   can take up to 24 hours. Once GitHub reports the domain is configured,
-   enable **Enforce HTTPS** in Pages settings.
-6. Open `https://groceriesdeals.jopism.com`. If the first API request is slow,
-   the free service may be waking; retry after it finishes starting.
+   Do not replace or change the existing records for `jopism.com` itself.
+   DNS changes can take up to 24 hours. Once GitHub reports the DNS check
+   passed and the certificate is ready, enable **Enforce HTTPS** in Pages
+   settings.
+4. The published page will be
+   `https://groceriesdeals.jopism.com`. Until the DNS record propagates, the
+   GitHub Pages address is `https://joppank.github.io/grocery-specials/`.
 
 The `ALLOWED_ORIGINS` setting in `render.yaml` is `*` so a Pages site can call
 the API without knowing its final URL in advance. The API is public and is not
